@@ -91,6 +91,7 @@ export interface ParserOptions {
   shouldIncludePropTagMap?: boolean;
   shouldIncludeExpression?: boolean;
   customComponentTypes?: string[];
+  customTypeFilter?: string[];
 }
 
 export interface StaticPropFilter {
@@ -222,6 +223,7 @@ export class Parser {
   private readonly savePropValueAsString: boolean;
   private readonly shouldIncludePropTagMap: boolean;
   private readonly shouldIncludeExpression: boolean;
+  private readonly customTypeFilter: string[];
 
   constructor(program: ts.Program, opts: ParserOptions) {
     const {
@@ -230,7 +232,8 @@ export class Parser {
       shouldRemoveUndefinedFromOptional,
       shouldExtractValuesFromUnion,
       shouldIncludePropTagMap,
-      shouldIncludeExpression
+      shouldIncludeExpression,
+      customTypeFilter
     } = opts;
     this.checker = program.getTypeChecker();
     this.propFilter = buildFilter(opts);
@@ -244,6 +247,7 @@ export class Parser {
     this.savePropValueAsString = Boolean(savePropValueAsString);
     this.shouldIncludePropTagMap = Boolean(shouldIncludePropTagMap);
     this.shouldIncludeExpression = Boolean(shouldIncludeExpression);
+    this.customTypeFilter = customTypeFilter || [];
   }
 
   private getComponentFromExpression(exp: ts.Symbol) {
@@ -364,7 +368,7 @@ export class Parser {
         commentSource,
         commentSource.valueDeclaration.getSourceFile()
       );
-      const props = this.getPropsInfo(propsType, defaultProps);
+      const props = this.getPropsInfo(propsType, defaultProps, this.customTypeFilter);
 
       for (const propName of Object.keys(props)) {
         const prop = props[propName];
@@ -648,7 +652,8 @@ export class Parser {
 
   public getPropsInfo(
     propsObj: ts.Symbol,
-    defaultProps: StringIndexedObject<string> = {}
+    defaultProps: StringIndexedObject<string> = {},
+    customTypeFilter = this.customTypeFilter
   ): Props {
     if (!propsObj.valueDeclaration) {
       return {};
@@ -736,11 +741,14 @@ export class Parser {
         description: description,
         name: propName,
         parent,
+        children: customTypeFilter.includes(type.name)
+          ? this.getPropsInfo(prop, {}, customTypeFilter)
+          : null,
         declarations: parents,
         required,
         type,
         ...propTags
-      };
+      } as any;
     });
 
     return result;
